@@ -18,7 +18,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 
 /**
- * The settings, on one scrolling screen: the edge fill, JPEG quality, whether sides move at startup, where results are saved,
+ * The settings, on one scrolling screen: the edge fill, JPEG quality, whether orange dots follow the sides next to them, where results are saved,
  * and the coffee reminder.  Changes are saved as they are made.  There is no "beside the original" and no All files access:
  * see {@link Prefs}.
  */
@@ -83,13 +83,13 @@ public final class SettingsActivity extends Activity {
         });
         col.addView(seek);
 
-        CheckBox sides = new CheckBox(this);
-        sides.setText("Sides move at startup (blue squares)");
-        sides.setChecked(Prefs.sidesAtStart(this));
-        sides.setOnCheckedChangeListener((c, on) -> Prefs.setSidesAtStart(this, on));
+        CheckBox slope = new CheckBox(this);
+        slope.setText("Orange dots slide a side along the sides next to it, keeping their angles");
+        slope.setChecked(Prefs.slideAlongSlope(this));
+        slope.setOnCheckedChangeListener((c, on) -> Prefs.setSlideAlongSlope(this, on));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
         lp.topMargin = dp(16);
-        col.addView(sides, lp);
+        col.addView(slope, lp);
 
         col.addView(label("Save results to", 16));
         saveSpinner = new Spinner(this);

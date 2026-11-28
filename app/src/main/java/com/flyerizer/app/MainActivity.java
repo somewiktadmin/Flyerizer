@@ -60,7 +60,7 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
     private final Quad quad = new Quad();
     private final Undo undo = new Undo();
     private int rot, selected = 0, step = 1, previewToken;
-    private boolean mirror, sidesMove, dotsMove = true, previewing;
+    private boolean mirror, sidesMove = true, dotsMove = true, previewing;     // blue and orange at every start
     private Uri lastSaved;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -80,7 +80,6 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
 
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
-        sidesMove = Prefs.sidesAtStart(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFFEEEEEE);
@@ -142,10 +141,8 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
             final int dx = n % 3 - 1, dy = n / 3 - 1;
             Button b;
             if (n == 4) {
-                stepBtn = button("\u00D71", v -> {
-                    step = step == 1 ? 10 : step == 10 ? 100 : 1;
-                    stepBtn.setText("\u00D7" + step);
-                });
+                stepBtn = button("\u00D7" + step, v -> nextStep());
+                stepBtn.setTextSize(13);
                 b = stepBtn;
             } else {
                 b = button(arrows[n], null);
@@ -175,7 +172,9 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
             refreshAll();
         });
         moreBtn = button("More", v -> showMore());
-        for (Button b : new Button[]{saveBtn, sidesBtn, dotsBtn, rotateBtn, moreBtn}) bar.addView(b, new LinearLayout.LayoutParams(0, -2, 1f));
+        Button[] barButtons = {saveBtn, sidesBtn, dotsBtn, rotateBtn, moreBtn};
+        float[] weights = {1f, 0.5f, 0.5f, 1f, 1f};                     // the two toggles together are as wide as one button
+        for (int k = 0; k < barButtons.length; k++) bar.addView(barButtons[k], new LinearLayout.LayoutParams(0, -2, weights[k]));
         root.addView(bar, new LinearLayout.LayoutParams(-1, -2));
 
         sizes = new TextView(this);
@@ -264,6 +263,8 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
                     rot = 0;
                     mirror = false;
                     selected = 0;
+                    if (step > 100 && Math.max(src.w, src.h) < 3000) step = 100;   // x1000 is only for big photos
+                    stepBtn.setText("\u00D7" + step);
                     undo.clear();
                     view.setPhoto(src, quad, undo);
                     openBtn.setVisibility(View.GONE);
@@ -335,9 +336,16 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
         refreshAll();
     }
 
+    /** The nudge step goes 1, 10, 100, and 1000 too when the photo is big enough (3000 pixels or more) to need it. */
+    private void nextStep() {
+        int top = src != null && Math.max(src.w, src.h) >= 3000 ? 1000 : 100;
+        step = step >= top ? 1 : step * 10;
+        stepBtn.setText("\u00D7" + step);
+    }
+
     private void toggleDots() {
         dotsMove = !dotsMove;
-        say(dotsMove ? "Orange dots: drag one to slide its side straight across." : "Purple dots: drag one to bend its side.");
+        say(dotsMove ? "Orange dots: drag one to slide its side." : "Purple dots: drag one to bend its side.");
         refreshAll();
     }
 
@@ -563,6 +571,6 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
     @SuppressWarnings("deprecation")                                   // the system Back button; fine through Android 14
     @Override public void onBackPressed() {
         if (previewing) endPreview();                                   // Back leaves a preview before it leaves the app
-        else super.onBackPressed();
+        else moveTaskToBack(true);                                      // and it goes to the background with the photo kept; only a swipe in Recents closes it
     }
 }

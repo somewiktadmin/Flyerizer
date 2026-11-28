@@ -39,8 +39,9 @@ final class Prefs {
     static int jpegQuality(Context c) { return p(c).getInt("quality", 95); }
     static void setJpegQuality(Context c, int v) { p(c).edit().putInt("quality", Math.max(50, Math.min(100, v))).apply(); }
 
-    static boolean sidesAtStart(Context c) { return p(c).getBoolean("sidesAtStart", false); }
-    static void setSidesAtStart(Context c, boolean v) { p(c).edit().putBoolean("sidesAtStart", v).apply(); }
+    /** Whether an orange dot slides its side along the lines of the sides next to it, so they keep their angles.  On unless turned off. */
+    static boolean slideAlongSlope(Context c) { return p(c).getBoolean("slideSlope", true); }
+    static void setSlideAlongSlope(Context c, boolean v) { p(c).edit().putBoolean("slideSlope", v).apply(); }
 
     /** The size of the loupe that follows a dragged corner, in dp. */
     static int loupeDp(Context c) { return p(c).getInt("loupeDp", 120); }

@@ -20,8 +20,9 @@ import com.flyerizer.core.Undo;
 
 /**
  * The photo with its four corners, side curves and dots, under a finger.  One finger drags a corner or a dot, or pans when it
- * starts on empty space.  A purple dot bends its side.  An orange dot slides its side straight across (the top and bottom sides
- * up and down, the left and right sides sideways), and the two corners at its ends go with it.  Two fingers pinch and pan.  One
+ * starts on empty space.  A purple dot bends its side.  An orange dot slides its side across (the top and bottom sides up and
+ * down, the left and right sides sideways), and the two corners at its ends go with it, along the lines of the sides next to
+ * them when that Setting is on.  Two fingers pinch and pan.  One
  * corner is always selected, and a tap on another corner selects it.  A double tap on empty space fits the photo.  While a corner
  * or dot is dragged a loupe floats above the finger, because the finger covers exactly what you are trying to see: it shows the
  * real pixels around the handle.
@@ -60,7 +61,7 @@ final class PhotoTouchView extends View {
     private Kind kind = Kind.NONE;
     private int index;
     private float downX, downY, lastX, lastY, grabDx, grabDy, lastCx, lastCy;
-    private boolean moved, gesture, haveCentroid;
+    private boolean moved, gesture, haveCentroid, slopeSlide;
     private long lastTapTime;
     private final double[][] sideStart = new double[2][2];           // the two corners of a side being slid, as they were at the touch
     private Bitmap loupe;
@@ -245,13 +246,26 @@ final class PhotoTouchView extends View {
         return -1;
     }
 
-    /** Slides a side straight across by (dx, dy) photo pixels from where it was at the touch: only the up-down or left-right part counts. */
+    /**
+     * Slides a side across by (dx, dy) photo pixels from where it was at the touch: only the up-down part for the top and bottom
+     * sides, only the left-right part for the left and right sides.  With the slope Setting on, each of its two corners also
+     * travels along the line of the side next to it, so those sides keep their angles.  A neighbor that runs nearly along the
+     * slide (steeper than 4 to 1) cannot be followed, and that corner just goes straight across.
+     */
     private void slideSide(int side, double dx, double dy) {
-        boolean vertical = side == Quad.TOP || side == Quad.BOTTOM;
+        boolean vertical = side == Quad.TOP || side == Quad.BOTTOM;     // true: the side moves up and down
+        double move = Math.rint(vertical ? dy : dx);
         for (int k = 0; k < 2; k++) {
             int corner = Quad.SIDE_ENDS[side][k];
-            quad.c[corner][0] = sideStart[k][0] + (vertical ? 0 : Math.rint(dx));
-            quad.c[corner][1] = sideStart[k][1] + (vertical ? Math.rint(dy) : 0);
+            double x0 = sideStart[k][0], y0 = sideStart[k][1], along = 0;   // along: how far the corner goes the other way
+            if (slopeSlide) {
+                double[] n = quad.c[vertical ? Quad.DX_PARTNER[corner] : Quad.DY_PARTNER[corner]];
+                double mx = vertical ? n[1] - y0 : n[0] - x0;           // the neighbor's distance in the direction of the slide
+                double ox = vertical ? n[0] - x0 : n[1] - y0;           // and across it
+                if (Math.abs(mx) >= 1 && Math.abs(ox / mx) <= 4) along = Math.rint(move * ox / mx);
+            }
+            quad.c[corner][0] = vertical ? x0 + along : x0 + move;
+            quad.c[corner][1] = vertical ? y0 + move : y0 + along;
         }
     }
 
@@ -284,6 +298,7 @@ final class PhotoTouchView extends View {
                         sideStart[k][0] = quad.c[Quad.SIDE_ENDS[b][k]][0];
                         sideStart[k][1] = quad.c[Quad.SIDE_ENDS[b][k]][1];
                     }
+                    slopeSlide = Prefs.slideAlongSlope(getContext());
                 } else {
                     kind = Kind.BLANK;
                 }
