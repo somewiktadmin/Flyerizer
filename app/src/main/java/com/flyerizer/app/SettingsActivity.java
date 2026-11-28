@@ -133,7 +133,7 @@ public final class SettingsActivity extends Activity {
         sv.addView(col);
         sv.setFitsSystemWindows(true);
         setContentView(sv);
-        sv.post(() -> ready = true);                    // the spinners call back once on their own when they are first shown
+        sv.post(() -> ready = true); // the spinners call back once on their own when they are first shown
     }
 
     private void showFolder() {

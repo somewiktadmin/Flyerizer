@@ -82,7 +82,6 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
         super.onCreate(saved);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFFEEEEEE);
         root.setFitsSystemWindows(true);
 
         FrameLayout center = new FrameLayout(this);
