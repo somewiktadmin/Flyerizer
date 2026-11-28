@@ -8,7 +8,6 @@ import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.Rect;
 import android.graphics.RectF;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -23,9 +22,9 @@ import com.flyerizer.core.Undo;
  * starts on empty space.  A purple dot bends its side.  An orange dot slides its side across (the top and bottom sides up and
  * down, the left and right sides sideways), and the two corners at its ends go with it, along the lines of the sides next to
  * them when that Setting is on.  Two fingers pinch and pan.  One
- * corner is always selected, and a tap on another corner selects it.  A double tap on empty space fits the photo.  While a corner
- * or dot is dragged a loupe floats above the finger, because the finger covers exactly what you are trying to see: it shows the
- * real pixels around the handle.
+ * corner is always selected, and a tap on another corner selects it.  A double tap on empty space fits the photo.  A square
+ * window of the real pixels around the selected corner is always on screen in the opposite corner of the photo area, because the
+ * finger covers exactly what you are trying to see.
  */
 final class PhotoTouchView extends View {
     interface Listener {
@@ -36,7 +35,7 @@ final class PhotoTouchView extends View {
 
     static final int PURPLE = 0xFFA020F0, ORANGE = 0xFFFF8C00;          // dots that bend a side, and dots that slide a side
     private static final int RED = 0xFFFF2020, BLUE = 0xFF1E6BFF, GOLD = 0xFFFFC800, CYAN = 0xFF00E5FF;
-    private static final int LOUPE_HALF = 20;                          // the loupe shows 41 by 41 photo pixels
+    private static final float PREVIEW_INSET_DP = 50;                  // the corner preview's distance from the edges
 
     Listener listener;
     private Quad quad = new Quad();
@@ -52,7 +51,7 @@ final class PhotoTouchView extends View {
     private final float density;
     private final int slop;
     private final Paint bmp = new Paint(), line = new Paint(Paint.ANTI_ALIAS_FLAG), fill = new Paint(Paint.ANTI_ALIAS_FLAG),
-            ring = new Paint(Paint.ANTI_ALIAS_FLAG), loupePaint = new Paint();
+            ring = new Paint(Paint.ANTI_ALIAS_FLAG), previewPaint = new Paint();
     private final Path path = new Path();
     private final ScaleGestureDetector scaler;
 
@@ -64,8 +63,8 @@ final class PhotoTouchView extends View {
     private boolean moved, gesture, haveCentroid, slopeSlide;
     private long lastTapTime;
     private final double[][] sideStart = new double[2][2];           // the two corners of a side being slid, as they were at the touch
-    private Bitmap loupe;
-    private final int[] loupePx = new int[(2 * LOUPE_HALF + 1) * (2 * LOUPE_HALF + 1)];
+    private Bitmap previewBmp;
+    private int[] previewPx;
 
     PhotoTouchView(Context c) {
         super(c);
@@ -163,7 +162,7 @@ final class PhotoTouchView extends View {
             boolean square = sidesMove && i != anchor;              // blue squares move together, the red dot stays put
             handle(canvas, x, y, 11 * density, square ? BLUE : RED, square);
         }
-        if ((kind == Kind.CORNER || kind == Kind.BEND) && moved) drawLoupe(canvas);
+        drawCornerPreview(canvas);
     }
 
     private void handle(Canvas canvas, float x, float y, float r, int color, boolean square) {
@@ -181,44 +180,53 @@ final class PhotoTouchView extends View {
         ring.setStrokeWidth(3 * density);
     }
 
-    private void drawLoupe(Canvas canvas) {
-        double hx, hy;
-        if (kind == Kind.CORNER) {
-            hx = quad.c[index][0];
-            hy = quad.c[index][1];
-        } else {
-            double[] d = quad.bendDot(index);
-            hx = d[0];
-            hy = d[1];
+    /**
+     * A square window of the real photo pixels around the selected corner, with a crosshair on that corner.  It is always on
+     * screen, in the photo area's opposite corner (TL shows it at the bottom right, TR at the bottom left, BL at the top right,
+     * BR at the top left), because the finger covers exactly what you are trying to see.  Touches pass through it.  Its size (a
+     * percent of the width) and its zoom are Settings.
+     */
+    private void drawCornerPreview(Canvas canvas) {
+        int percent = Prefs.previewPercent(getContext());
+        float inset = PREVIEW_INSET_DP * density;
+        float side = Math.min(getWidth() * percent / 100f, Math.min(getWidth(), getHeight()) - 2 * inset);
+        if (raster == null || selected < 0 || percent <= 0 || side < 24 * density) return;
+        float zoom = Prefs.previewZoom(getContext()) / 100f;
+        int n = (int) Math.ceil(side / zoom);                       // photo pixels across the window
+        if (n % 2 == 0) n++;                                        // an odd number, so one pixel sits in the middle
+        n = Math.max(3, n);
+        if (previewBmp == null || previewBmp.getWidth() != n) {
+            previewBmp = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888);
+            previewPx = new int[n * n];
         }
-        int n = 2 * LOUPE_HALF + 1, cx = (int) Math.rint(hx), cy = (int) Math.rint(hy);
+        int half = n / 2, cx = (int) Math.rint(quad.c[selected][0]), cy = (int) Math.rint(quad.c[selected][1]);
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < n; i++) {
-                int px = cx - LOUPE_HALF + i, py = cy - LOUPE_HALF + j;
+                int px = cx - half + i, py = cy - half + j;
                 boolean in = px >= 0 && py >= 0 && px < raster.w && py < raster.h;
-                loupePx[j * n + i] = in ? 0xFF000000 | raster.rgb[py * raster.w + px] : 0xFF000000;
+                previewPx[j * n + i] = in ? 0xFF000000 | raster.rgb[py * raster.w + px] : 0xFF000000;
             }
         }
-        if (loupe == null) loupe = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888);
-        loupe.setPixels(loupePx, 0, n, 0, 0, n, n);
-        float size = Prefs.loupeDp(getContext()) * density, r = size / 2;
-        float lx = Math.max(r, Math.min(getWidth() - r, lastX));
-        float ly = lastY - 110 * density;
-        if (ly < r) ly = lastY + 110 * density;                     // near the top edge, below the finger instead
+        previewBmp.setPixels(previewPx, 0, n, 0, 0, n, n);
+        boolean right = selected == 0 || selected == 3, bottom = selected == 0 || selected == 1;   // TL and BL: right.  TL and TR: bottom.
+        float left = right ? getWidth() - inset - side : inset, top = bottom ? getHeight() - inset - side : inset;
+        float mx = left + side / 2, my = top + side / 2, d = n * zoom;
         canvas.save();
-        path.reset();
-        path.addCircle(lx, ly, r, Path.Direction.CW);
-        canvas.clipPath(path);
-        loupePaint.setFilterBitmap(false);
-        canvas.drawBitmap(loupe, new Rect(0, 0, n, n), new RectF(lx - r, ly - r, lx + r, ly + r), loupePaint);
+        canvas.clipRect(left, top, left + side, top + side);
+        canvas.drawColor(0xFF000000);
+        previewPaint.setFilterBitmap(false);
+        canvas.drawBitmap(previewBmp, null, new RectF(mx - d / 2, my - d / 2, mx + d / 2, my + d / 2), previewPaint);
         canvas.restore();
         ring.setColor(0xFFFFFFFF);
-        canvas.drawCircle(lx, ly, r, ring);
-        line.setColor(RED);
-        canvas.drawLine(lx - r, ly, lx + r, ly, line);
-        canvas.drawLine(lx, ly - r, lx, ly + r, line);
-        line.setColor(GOLD);
+        ring.setStrokeWidth(2 * density);
+        canvas.drawRect(left, top, left + side, top + side, ring);
         ring.setStrokeWidth(3 * density);
+        line.setColor(RED);
+        line.setStrokeWidth(density);
+        canvas.drawLine(left, my, left + side, my, line);
+        canvas.drawLine(mx, top, mx, top + side, line);
+        line.setColor(GOLD);
+        line.setStrokeWidth(2 * density);
     }
 
     //  touch

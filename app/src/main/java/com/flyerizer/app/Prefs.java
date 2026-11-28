@@ -43,8 +43,13 @@ final class Prefs {
     static boolean slideAlongSlope(Context c) { return p(c).getBoolean("slideSlope", true); }
     static void setSlideAlongSlope(Context c, boolean v) { p(c).edit().putBoolean("slideSlope", v).apply(); }
 
-    /** The size of the loupe that follows a dragged corner, in dp. */
-    static int loupeDp(Context c) { return p(c).getInt("loupeDp", 120); }
+    /** The size of the corner preview, as a percent of the screen width.  0 hides it. */
+    static int previewPercent(Context c) { return p(c).getInt("previewPercent", 25); }
+    static void setPreviewPercent(Context c, int v) { p(c).edit().putInt("previewPercent", Math.max(0, Math.min(50, v))).apply(); }
+
+    /** How much the corner preview magnifies the photo, in percent. */
+    static int previewZoom(Context c) { return p(c).getInt("previewZoom", 200); }
+    static void setPreviewZoom(Context c, int v) { p(c).edit().putInt("previewZoom", Math.max(100, Math.min(1000, v))).apply(); }
 
     static String saveMode(Context c) { return p(c).getString("saveMode", SAVE_PICTURES); }
 

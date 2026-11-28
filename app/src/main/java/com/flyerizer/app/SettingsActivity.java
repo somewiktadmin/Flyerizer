@@ -18,7 +18,8 @@ import android.widget.Spinner;
 import android.widget.TextView;
 
 /**
- * The settings, on one scrolling screen: the edge fill, JPEG quality, whether orange dots follow the sides next to them, where results are saved,
+ * The settings, on one scrolling screen: the edge fill, JPEG quality, the corner preview's size and zoom, whether orange dots
+ * follow the sides next to them, where results are saved,
  * and the coffee reminder.  Changes are saved as they are made.  There is no "beside the original" and no All files access:
  * see {@link Prefs}.
  */
@@ -30,6 +31,10 @@ public final class SettingsActivity extends Activity {
     private Spinner saveSpinner;
     private TextView folderText;
     private boolean ready;
+
+    private static String previewSizeText(int percent) {
+        return percent == 0 ? "Corner preview: hidden" : "Corner preview size " + percent + "% of the width";
+    }
 
     private int dp(int v) {
         return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
@@ -83,8 +88,42 @@ public final class SettingsActivity extends Activity {
         });
         col.addView(seek);
 
+        final TextView ps = label(previewSizeText(Prefs.previewPercent(this)), 16);
+        col.addView(ps);
+        SeekBar psSeek = new SeekBar(this);
+        psSeek.setMax(50);                                              // 0 to 50 percent of the screen width; 0 hides it
+        psSeek.setProgress(Prefs.previewPercent(this));
+        psSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int p, boolean user) {
+                ps.setText(previewSizeText(p));
+                if (user) Prefs.setPreviewPercent(SettingsActivity.this, p);
+            }
+
+            @Override public void onStartTrackingTouch(SeekBar s) { }
+
+            @Override public void onStopTrackingTouch(SeekBar s) { }
+        });
+        col.addView(psSeek);
+
+        final TextView pz = label("Corner preview zoom " + Prefs.previewZoom(this) + "%", 16);
+        col.addView(pz);
+        SeekBar pzSeek = new SeekBar(this);
+        pzSeek.setMax(18);                                              // 100% to 1000% in steps of 50
+        pzSeek.setProgress((Prefs.previewZoom(this) - 100) / 50);
+        pzSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int p, boolean user) {
+                pz.setText("Corner preview zoom " + (100 + 50 * p) + "%");
+                if (user) Prefs.setPreviewZoom(SettingsActivity.this, 100 + 50 * p);
+            }
+
+            @Override public void onStartTrackingTouch(SeekBar s) { }
+
+            @Override public void onStopTrackingTouch(SeekBar s) { }
+        });
+        col.addView(pzSeek);
+
         CheckBox slope = new CheckBox(this);
-        slope.setText("Orange dots slide a side along the sides next to it, keeping their angles");
+        slope.setText("Side movement by dragging an orange dot follows angles, instead of perfect top, bottom, left, right motion.");
         slope.setChecked(Prefs.slideAlongSlope(this));
         slope.setOnCheckedChangeListener((c, on) -> Prefs.setSlideAlongSlope(this, on));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
