@@ -129,7 +129,7 @@ final class PhotoTouchView extends View {
         invalidate();
     }
 
-    // ----- drawing -----
+    //  drawing
 
     @Override protected void onDraw(Canvas canvas) {
         canvas.drawColor(0xFF202020);
@@ -221,7 +221,7 @@ final class PhotoTouchView extends View {
         ring.setStrokeWidth(3 * density);
     }
 
-    // ----- touch -----
+    //  touch
 
     private int hitCorner(float x, float y) {
         int best = -1;

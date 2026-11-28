@@ -60,7 +60,7 @@ final class Prefs {
 
     static void setSavePictures(Context c) { p(c).edit().putString("saveMode", SAVE_PICTURES).apply(); }
 
-    // ----- the coffee reminder: 50, 500, 1000, then every 1000 saves, switched off by an honor-system checkbox -----
+    //  the coffee reminder: 50, 500, 1000, then every 1000 saves, switched off by an honor-system checkbox
     static boolean coffeePaid(Context c) { return p(c).getBoolean("coffeePaid", false); }
     static void setCoffeePaid(Context c, boolean v) { p(c).edit().putBoolean("coffeePaid", v).apply(); }
 

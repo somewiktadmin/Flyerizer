@@ -155,3 +155,4 @@ public final class SettingsActivity extends Activity {
         showFolder();
     }
 }
+

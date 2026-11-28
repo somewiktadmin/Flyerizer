@@ -113,7 +113,7 @@ public final class Warp {
         return render(small, q.scaled(1.0 / f), Fill.REFLECT, false).finish(rot, mirror);
     }
 
-    // ----- sampling, with the same border rules as OpenCV's remap -----
+    //  sampling, with the same border rules as OpenCV's remap
 
     private static int index(int i, int n, Fill fill) {
         if (i >= 0 && i < n) return i;

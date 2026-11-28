@@ -145,7 +145,7 @@ final class BitmapIO {
         return bm;
     }
 
-    // ----- saving -----
+    //  saving
 
     /** Writes the result as name~1.jpg, name~2.jpg and so on up to ~99, a hard limit, and returns where it went. */
     static Saved saveJpeg(Context c, Raster r, String base, int quality) throws IOException {

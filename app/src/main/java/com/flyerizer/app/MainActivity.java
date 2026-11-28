@@ -211,7 +211,7 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
         return e;
     }
 
-    // ----- getting a photo -----
+    //  getting a photo
 
     @Override protected void onNewIntent(Intent in) {
         super.onNewIntent(in);
@@ -276,7 +276,7 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
         }).start();
     }
 
-    // ----- editing -----
+    //  editing
 
     @Override public void onEdited() {
         refreshAll();
@@ -469,7 +469,7 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
         pm.show();
     }
 
-    // ----- saving -----
+    //  saving
 
     private void saveNew() {
         if (src == null) {
@@ -517,7 +517,7 @@ public final class MainActivity extends Activity implements PhotoTouchView.Liste
         startActivity(Intent.createChooser(i, "Share result"));
     }
 
-    // ----- showing -----
+    //  showing
 
     private void say(String s) {
         status.setText(s);
