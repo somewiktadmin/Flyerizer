@@ -19,10 +19,12 @@ import com.flyerizer.core.Raster;
 import com.flyerizer.core.Undo;
 
 /**
- * The photo with its four corners, side curves and bend dots, under a finger.  One finger drags a corner or a purple dot, or pans
- * when it starts on empty space.  Two fingers pinch and pan.  A tap on empty space or on the selected corner lets go of it, and a
- * double tap on empty space fits the photo.  While a corner or dot is dragged a loupe floats above the finger, because the finger
- * covers exactly what you are trying to see: it shows the real pixels around the handle.
+ * The photo with its four corners, side curves and dots, under a finger.  One finger drags a corner or a dot, or pans when it
+ * starts on empty space.  A purple dot bends its side.  An orange dot slides its side straight across (the top and bottom sides
+ * up and down, the left and right sides sideways), and the two corners at its ends go with it.  Two fingers pinch and pan.  One
+ * corner is always selected, and a tap on another corner selects it.  A double tap on empty space fits the photo.  While a corner
+ * or dot is dragged a loupe floats above the finger, because the finger covers exactly what you are trying to see: it shows the
+ * real pixels around the handle.
  */
 final class PhotoTouchView extends View {
     interface Listener {
@@ -31,7 +33,8 @@ final class PhotoTouchView extends View {
         void onSelected(int corner);
     }
 
-    private static final int RED = 0xFFFF2020, BLUE = 0xFF1E6BFF, PURPLE = 0xFFA020F0, GOLD = 0xFFFFC800, CYAN = 0xFF00E5FF;
+    static final int PURPLE = 0xFFA020F0, ORANGE = 0xFFFF8C00;          // dots that bend a side, and dots that slide a side
+    private static final int RED = 0xFFFF2020, BLUE = 0xFF1E6BFF, GOLD = 0xFFFFC800, CYAN = 0xFF00E5FF;
     private static final int LOUPE_HALF = 20;                          // the loupe shows 41 by 41 photo pixels
 
     Listener listener;
@@ -40,8 +43,8 @@ final class PhotoTouchView extends View {
     private Raster raster;
     private Bitmap display;
     private int shrink = 1;
-    private boolean sidesMove;
-    private int selected = -1;
+    private boolean sidesMove, dotsMove = true;
+    private int selected = 0;
 
     private float scale = 1, offX, offY;
     private boolean fitted = true;
@@ -57,8 +60,9 @@ final class PhotoTouchView extends View {
     private Kind kind = Kind.NONE;
     private int index;
     private float downX, downY, lastX, lastY, grabDx, grabDy, lastCx, lastCy;
-    private boolean moved, wasSelected, gesture, haveCentroid;
+    private boolean moved, gesture, haveCentroid;
     private long lastTapTime;
+    private final double[][] sideStart = new double[2][2];           // the two corners of a side being slid, as they were at the touch
     private Bitmap loupe;
     private final int[] loupePx = new int[(2 * LOUPE_HALF + 1) * (2 * LOUPE_HALF + 1)];
 
@@ -82,16 +86,17 @@ final class PhotoTouchView extends View {
         raster = r;
         quad = q;
         undo = u;
-        selected = -1;
+        selected = 0;
         shrink = Math.max(1, (int) Math.ceil(Math.max(r.w, r.h) / 3000.0));
         if (display != null) display.recycle();
         display = BitmapIO.toBitmap(shrink > 1 ? r.shrink(shrink) : r);
         fit();
     }
 
-    void setState(int selectedCorner, boolean sides) {
+    void setState(int selectedCorner, boolean sides, boolean dots) {
         selected = selectedCorner;
         sidesMove = sides;
+        dotsMove = dots;
         invalidate();
     }
 
@@ -145,7 +150,7 @@ final class PhotoTouchView extends View {
         }
         for (int s = 0; s < 4; s++) {
             double[] d = quad.bendDot(s);
-            handle(canvas, sx(d[0]), sy(d[1]), 8 * density, PURPLE, false);
+            handle(canvas, sx(d[0]), sy(d[1]), 8 * density, dotsMove ? ORANGE : PURPLE, false);
         }
         int anchor = (sidesMove && selected >= 0) ? (selected + 2) % 4 : -1;
         for (int i = 0; i < 4; i++) {
@@ -240,6 +245,16 @@ final class PhotoTouchView extends View {
         return -1;
     }
 
+    /** Slides a side straight across by (dx, dy) photo pixels from where it was at the touch: only the up-down or left-right part counts. */
+    private void slideSide(int side, double dx, double dy) {
+        boolean vertical = side == Quad.TOP || side == Quad.BOTTOM;
+        for (int k = 0; k < 2; k++) {
+            int corner = Quad.SIDE_ENDS[side][k];
+            quad.c[corner][0] = sideStart[k][0] + (vertical ? 0 : Math.rint(dx));
+            quad.c[corner][1] = sideStart[k][1] + (vertical ? Math.rint(dy) : 0);
+        }
+    }
+
     @Override public boolean onTouchEvent(MotionEvent e) {
         if (raster == null) return true;
         scaler.onTouchEvent(e);
@@ -253,7 +268,6 @@ final class PhotoTouchView extends View {
                 haveCentroid = false;
                 int c = hitCorner(x, y), b = hitBend(x, y);
                 if (c >= 0) {
-                    wasSelected = selected == c;
                     selected = c;
                     kind = Kind.CORNER;
                     index = c;
@@ -266,6 +280,10 @@ final class PhotoTouchView extends View {
                     double[] d = quad.bendDot(b);
                     grabDx = sx(d[0]) - x;
                     grabDy = sy(d[1]) - y;
+                    for (int k = 0; k < 2; k++) {
+                        sideStart[k][0] = quad.c[Quad.SIDE_ENDS[b][k]][0];
+                        sideStart[k][1] = quad.c[Quad.SIDE_ENDS[b][k]][1];
+                    }
                 } else {
                     kind = Kind.BLANK;
                 }
@@ -312,27 +330,20 @@ final class PhotoTouchView extends View {
                 } else if (kind == Kind.CORNER || kind == Kind.BEND) {
                     if (!moved) {
                         moved = true;
-                        undo.begin(quad, null, kind == Kind.CORNER ? "corner" + (sidesMove ? " and sides" : "") : "bend");
+                        undo.begin(quad, null, kind == Kind.CORNER ? "corner" + (sidesMove ? " and sides" : "") : dotsMove ? "side" : "bend");
                     }
-                    double px = ix(x + grabDx), py = iy(y + grabDy);
-                    if (kind == Kind.CORNER) quad.place(index, Math.rint(px), Math.rint(py), sidesMove);
-                    else quad.bendFromPoint(index, px, py);
+                    if (kind == Kind.CORNER) quad.place(index, Math.rint(ix(x + grabDx)), Math.rint(iy(y + grabDy)), sidesMove);
+                    else if (dotsMove) slideSide(index, (x - downX) / scale, (y - downY) / scale);
+                    else quad.bendFromPoint(index, ix(x + grabDx), iy(y + grabDy));
                     if (listener != null) listener.onEdited();
                 }
                 invalidate();
                 return true;
             case MotionEvent.ACTION_UP:
-                if (!gesture && !moved) {
-                    if (kind == Kind.CORNER && wasSelected) {       // a tap on the selected corner lets go of it
-                        selected = -1;
-                        if (listener != null) listener.onSelected(-1);
-                    } else if (kind == Kind.BLANK) {
-                        long now = e.getEventTime();
-                        if (now - lastTapTime < 300) fit();         // a double tap on empty space fits the photo
-                        lastTapTime = now;
-                        selected = -1;
-                        if (listener != null) listener.onSelected(-1);
-                    }
+                if (!gesture && !moved && kind == Kind.BLANK) {
+                    long now = e.getEventTime();
+                    if (now - lastTapTime < 300) fit();             // a double tap on empty space fits the photo
+                    lastTapTime = now;
                 }
                 kind = Kind.NONE;
                 moved = false;
